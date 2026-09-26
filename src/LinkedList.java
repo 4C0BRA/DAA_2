@@ -20,7 +20,7 @@ import java.util.NoSuchElementException;
  *
  * @param <T> element type ({@code null} elements are allowed)
  */
-public class LinkedList<T> implements Iterable<T> {
+public class LinkedList<T> implements IndexedList<T> {
 
     private static final class Node<T> {
         T value;
@@ -43,6 +43,7 @@ public class LinkedList<T> implements Iterable<T> {
     // ------------------------------------------------------------------ operations
 
     /** Appends {@code x} at the end using the tail pointer. Θ(1). */
+    @Override
     public void add(T x) {
         linkLast(x);
         accesses++;
@@ -52,6 +53,7 @@ public class LinkedList<T> implements Iterable<T> {
      * Inserts {@code x} at position {@code index} (0 ≤ index ≤ size).
      * Locating the position costs Θ(min(index, size − index)); the splice itself is Θ(1).
      */
+    @Override
     public void add(int index, T x) {
         checkPositionIndex(index);
         if (index == size) {
@@ -63,6 +65,7 @@ public class LinkedList<T> implements Iterable<T> {
     }
 
     /** Removes and returns the element at {@code index}. Θ(min(index, size − 1 − index)). */
+    @Override
     public T remove(int index) {
         checkElementIndex(index);
         Node<T> target = node(index);
@@ -71,17 +74,20 @@ public class LinkedList<T> implements Iterable<T> {
     }
 
     /** Returns the element at {@code index}. Θ(min(index, size − 1 − index)): pointer chasing. */
+    @Override
     public T get(int index) {
         checkElementIndex(index);
         return node(index).value;
     }
 
     /** Linear search from the head. Θ(1) best, Θ(n) average and worst (absent). */
+    @Override
     public boolean contains(Object x) {
         return indexOf(x) >= 0;
     }
 
     /** Index of the first occurrence of {@code x}, or −1. Counts one comparison per node inspected. */
+    @Override
     public int indexOf(Object x) {
         int i = 0;
         if (x == null) {
@@ -106,28 +112,34 @@ public class LinkedList<T> implements Iterable<T> {
         return -1;
     }
 
+    @Override
     public int size() {
         return size;
     }
 
+    @Override
     public boolean isEmpty() {
         return size == 0;
     }
 
     // ------------------------------------------------------------------ instrumentation
 
+    @Override
     public long getAccesses() {
         return accesses;
     }
 
+    @Override
     public long getComparisons() {
         return comparisons;
     }
 
+    @Override
     public long getMovements() {
         return movements;
     }
 
+    @Override
     public void resetCounters() {
         accesses = 0;
         comparisons = 0;

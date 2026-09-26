@@ -20,7 +20,7 @@ import java.util.NoSuchElementException;
  *
  * @param <T> element type ({@code null} elements are allowed)
  */
-public class DynamicArray<T> implements Iterable<T> {
+public class DynamicArray<T> implements IndexedList<T> {
 
     private static final int DEFAULT_CAPACITY = 8;
 
@@ -45,6 +45,7 @@ public class DynamicArray<T> implements Iterable<T> {
     // ------------------------------------------------------------------ operations
 
     /** Appends {@code x} at the end. Amortized Θ(1); Θ(n) when a resize happens. */
+    @Override
     public void add(T x) {
         ensureCapacity(size + 1);
         data[size++] = x;
@@ -59,6 +60,7 @@ public class DynamicArray<T> implements Iterable<T> {
      * iteration, {@code data[0..j-1]} holds the original elements A[0..j-1] and
      * {@code data[j+1..size]} holds the original elements A[j..size-1].
      */
+    @Override
     public void add(int index, T x) {
         checkPositionIndex(index);
         ensureCapacity(size + 1);
@@ -75,6 +77,7 @@ public class DynamicArray<T> implements Iterable<T> {
      * Removes and returns the element at {@code index} (0 ≤ index < size), shifting the
      * elements at positions index+1..size-1 one slot to the left. Θ(size − index).
      */
+    @Override
     public T remove(int index) {
         checkElementIndex(index);
         T removed = elementAt(index);
@@ -88,6 +91,7 @@ public class DynamicArray<T> implements Iterable<T> {
     }
 
     /** Returns the element at {@code index}. Θ(1): a single address computation. */
+    @Override
     public T get(int index) {
         checkElementIndex(index);
         accesses++;
@@ -95,11 +99,13 @@ public class DynamicArray<T> implements Iterable<T> {
     }
 
     /** Linear search. Θ(1) best (first slot), Θ(n) average and worst (absent). */
+    @Override
     public boolean contains(Object x) {
         return indexOf(x) >= 0;
     }
 
     /** Index of the first occurrence of {@code x}, or −1. Counts one comparison per slot inspected. */
+    @Override
     public int indexOf(Object x) {
         final Object[] a = data;
         final int n = size;
@@ -125,10 +131,12 @@ public class DynamicArray<T> implements Iterable<T> {
         return -1;
     }
 
+    @Override
     public int size() {
         return size;
     }
 
+    @Override
     public boolean isEmpty() {
         return size == 0;
     }
@@ -140,18 +148,22 @@ public class DynamicArray<T> implements Iterable<T> {
 
     // ------------------------------------------------------------------ instrumentation
 
+    @Override
     public long getAccesses() {
         return accesses;
     }
 
+    @Override
     public long getComparisons() {
         return comparisons;
     }
 
+    @Override
     public long getMovements() {
         return movements;
     }
 
+    @Override
     public void resetCounters() {
         accesses = 0;
         comparisons = 0;
