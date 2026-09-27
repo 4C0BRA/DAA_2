@@ -1,16 +1,66 @@
+<div align="center">
+
 # Assignment 2 — Algorithmic Analysis, Correctness and Performance Trade-offs
 
-Three data structures (**Dynamic Array**, **Linked List** and **Min-Heap**) are implemented from scratch in Java. The report proves two of their operations correct with loop invariants and derives O/Ω/Θ bounds for every required operation. It then tests those bounds against a reproducible benchmark of the four required workloads.
+**Dynamic Array · Linked List · Min-Heap**<br>
+implemented from scratch in Java · proved correct with loop invariants · benchmarked against their O / Ω / Θ bounds
 
+![Java 17+](https://img.shields.io/badge/Java-17%2B-E76F00?logo=openjdk&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-139%20passing-2EA44F)
+![Structures](https://img.shields.io/badge/structures-3%20from%20scratch-2A78D6)
+![Workloads](https://img.shields.io/badge/workloads-4%20%C3%97%204%20sizes-2A78D6)
+![Seed](https://img.shields.io/badge/seed-Random%2842%29-6E7781)
+![Dependencies](https://img.shields.io/badge/dependencies-none-6E7781)
+
+[Overview](#1-overview) •
+[Complexity](#2-complexity-analysis) •
+[Correctness](#3-correctness-loop-invariants) •
+[Setup](#4-experimental-setup) •
+[Results](#5-results) •
+[Discussion](#6-discussion) •
+[Recommendations](#7-design-recommendations) •
+[Conclusion](#8-conclusion) •
+[Tests](#testing-and-correctness-validation)
+
+</div>
+
+---
+
+## At a glance
+
+| Workload (n = 100,000) | Best choice | What the measurements show |
+|---|---|---|
+| **W1** · random access `get(i)` | Dynamic Array | 26 ns vs. 36 µs per `get`: the list is **1,368×** slower (Θ(1) vs. Θ(n)) |
+| **W2** · search `contains(x)` | Dynamic Array | identical 74.6 M comparisons, yet 71.8 ms vs. 149.5 ms: locality, not Big-O |
+| **W3** · insert / remove at index 0 | Linked List | 0.03 ms vs. 794 ms for 1,000 insertions (Θ(1) vs. Θ(n)) |
+| **W3** · insert / remove at n/2 | Array with a bulk copy | `ArrayList` 4.15 ms vs. linked list 81 ms. Both are Θ(n), and constants decide |
+| **W4** · priority processing | Min-Heap | 2.3 comparisons per insert, 28.3 ≈ 2·log₂n per extract, output sorted in every run |
+
+> [!IMPORTANT]
+> **Headline finding.** The analysis predicted the operation counts (exactly where they are deterministic, within 0.6% where they depend on random data), but not the running time. The same element-by-element shift loop, doing the same 100.5 M shifts, costs **7.9 ns per shift** under the JVM's default G1 collector, **0.69 ns** under ParallelGC and **0.08 ns** as one bulk `System.arraycopy`: a **96×** spread with no change in Θ. The cause, a GC write barrier on every reference store, is isolated in §5.3 and explained in §6 (Q5).
+
+## Quick start
+
+```bash
+./run_tests.sh        # compile + 139 correctness checks
+./run_benchmark.sh    # all 4 workloads, the W3 ablation and the plots (under a minute)
 ```
+
+<details>
+<summary><b>Manual commands / Windows</b></summary>
+
+```bash
 javac -encoding UTF-8 -d out src/*.java
 java -cp out Tests                                   # 139 correctness checks
 java -Xms1g -Xmx1g -XX:+UseG1GC -cp out Benchmark    # all workloads -> results/tables/
 python3 scripts/plot_results.py                      # plots -> results/plots/
 ```
-`./run_benchmark.sh` (or `run_benchmark.bat` on Windows) reproduces every table and plot in this report, including the two W3 ablation runs. The whole run takes under a minute. Requirements: JDK 17 or newer, plus Python 3 with matplotlib for the plots.
 
-**Contents:** [1 Overview](#1-overview) · [2 Complexity analysis](#2-complexity-analysis) · [3 Correctness](#3-correctness-loop-invariants) · [4 Experimental setup](#4-experimental-setup) · [5 Results](#5-results) · [6 Discussion](#6-discussion) · [7 Design recommendations](#7-design-recommendations) · [8 Conclusion](#8-conclusion) · [Testing](#testing-and-correctness-validation) · [Repository layout](#repository-layout)
+On Windows, run `run_tests.bat` and `run_benchmark.bat` instead.
+
+</details>
+
+**Requirements:** JDK 17 or newer · Python 3 with matplotlib (for the plots only). There are no other dependencies.
 
 ---
 
@@ -101,11 +151,11 @@ size++;
 
 Let s = `size` and A[0..s−1] be the list contents **before** the call. The precondition checked in the first line is 0 ≤ index ≤ s. `ensureCapacity` only copies `data[0..s−1]` into a larger array, so afterwards `data[0..s−1] = A[0..s−1]` and slot `data[s]` exists.
 
-**Loop invariant I(j).** Every time the guard `j > index` is evaluated:
-
-1. `data[0..j−1] = A[0..j−1]`: the prefix is untouched.
-2. `data[j+1..s] = A[j..s−1]`: the suffix has been shifted right by exactly one slot.
-3. index ≤ j ≤ s.
+> **Loop invariant I(j).** Every time the guard `j > index` is evaluated:
+>
+> 1. `data[0..j−1] = A[0..j−1]`: the prefix is untouched.
+> 2. `data[j+1..s] = A[j..s−1]`: the suffix has been shifted right by exactly one slot.
+> 3. index ≤ j ≤ s.
 
 **Initialization.** Before the first test, j = s. (1) reads `data[0..s−1] = A[0..s−1]`, which holds as noted above. (2) concerns `data[s+1..s]`, an empty range, so it holds trivially. (3) index ≤ s is the precondition.
 
@@ -117,7 +167,7 @@ Let s = `size` and A[0..s−1] be the list contents **before** the call. The pre
 `data[0..index−1] = A[0..index−1]` and `data[index+1..s] = A[index..s−1]`.
 The next two statements set `data[index] = x` and `size = s+1`. Hence
 
-> `data[0..s] = A[0..index−1] · x · A[index..s−1]`,
+> **`data[0..s] = A[0..index−1] · x · A[index..s−1]`**,
 
 which is exactly the specification of inserting x at position `index`: x ends up at `index`, every old element keeps its relative order, and no element is lost or duplicated. Invalid indices throw before any state changes, which the tests check ("failed calls leave the list unchanged"). `remove(index)` uses the mirror-image loop (`data[j] = data[j+1]` for j = index … s−2), whose invariant is `data[index..j−1] = A[index+1..j]` with `data[j..s−1] = A[j..s−1]`.
 
@@ -144,11 +194,11 @@ void siftDown(int i) {
 
 *Definitions.* For a position c ≥ 1 with c < s′, the **edge** (p, c) connects c to its parent p = ⌊(c−1)/2⌋. An edge is **good** if `a[p] ≤ a[c]`. The **heap property P** says that every edge is good. Along any path to the root, P makes the values non-increasing, so under P the root holds a minimum. Let H be the (valid) heap before the call. `min = H[0]` is therefore a minimum of H.
 
-**Loop invariant J(i).** At the start of each iteration of `siftDown`:
-
-- **(J1)** `a[0..s′−1]` holds exactly the multiset H minus one copy of `min`.
-- **(J2)** every edge (p, c) with **p ≠ i** is good. Only the edges from i down to its children may be bad.
-- **(J3)** if i > 0, then `a[parent(i)] ≤ a[c]` for every child c of i. (The grandparent already bounds the grandchildren.)
+> **Loop invariant J(i).** At the start of each iteration of `siftDown`:
+>
+> - **(J1)** `a[0..s′−1]` holds exactly the multiset H minus one copy of `min`.
+> - **(J2)** every edge (p, c) with **p ≠ i** is good. Only the edges from i down to its children may be bad.
+> - **(J3)** if i > 0, then `a[parent(i)] ≤ a[c]` for every child c of i. (The grandparent already bounds the grandchildren.)
 
 **Initialization** (i = 0).
 - (J1): the call removed `H[0] = min` and moved `H[s−1]` into slot 0, so the multiset is H − {min}.
@@ -190,12 +240,16 @@ Hence J(m) holds at the start of the next iteration.
 
 - **W1**: 10,000 indices, uniform in [0, n−1] and generated before timing. The expected list cost is computed exactly as `m · (Σᵢ (min(i, n−1−i)+1)) / n`, which is ≈ m(n/4 + 1).
 - **W2**: 1,000 keys, interleaved: 500 **hits** and 500 **misses**. A hit is a copy of a random stored value, created as a *new* `Integer`, so `equals` is exercised rather than reference identity. A miss is a negative number; all stored values are non-negative, so it is guaranteed absent. Expected comparisons: 500·(n+1)/2 + 500·n.
-- **W3**: the index is **fixed** at 0 or ⌊n/2⌋, as the specification says. Two interpretation choices are documented here:
-  1. *"Restore the original structure."* With n = 100, 1,000 removals from a 100-element structure are impossible. The removal phase therefore starts from the state left by the insertion phase (n + 1,000 elements) and removes at the same index 1,000 times. Inserting 1,000 times at a fixed index p places the new elements in the block p … p+999, and removing 1,000 times at p deletes exactly that block. **The removals therefore restore the original structure**, which the benchmark verifies after every repetition (the "Restored" column). Every repetition rebuilds the original structure from scratch, untimed.
-  2. The array's capacity is reserved for n + 1,000 elements before timing. That way W3 measures positional shifting and not resizing, which W4 and `add(x)` already cover. Because the structure grows from n to n + m during the phase, the exact shift count is **m·(n − p) + m(m−1)/2**. For small n the m(m−1)/2 = 499,500 term dominates, which is important for reading the n = 100 row.
+- **W3**: the index is **fixed** at 0 or ⌊n/2⌋, as the specification says. Two interpretation choices are explained in the notes below.
 - **W4**: the heap starts empty at the default capacity of 16, so its growth cost is part of the insertion time, as it would be in real use. The extracted sequence is checked for non-decreasing order after timing. `peekMin` is Θ(1) and deliberately **not** timed: in a loop, the JIT hoists the load of `heap[0]`, so any number would measure the compiler rather than the heap. Its correctness is covered by the tests.
 - **JDK reference (context only).** The same workloads, data and protocol are run on `ArrayList`, `java.util.LinkedList` and `PriorityQueue`. This is not required; it is there to separate "algorithm" from "implementation constant".
 - **W3 ablation.** W3 was re-run in two more JVM configurations (G1 with 32 MB regions, and ParallelGC) to test the explanation given in §6. Both commands are in `run_benchmark.sh`.
+
+> [!NOTE]
+> **W3: "Restore the original structure."** With n = 100, 1,000 removals from a 100-element structure are impossible. The removal phase therefore starts from the state left by the insertion phase (n + 1,000 elements) and removes at the same index 1,000 times. Inserting 1,000 times at a fixed index p places the new elements in the block p … p+999, and removing 1,000 times at p deletes exactly that block. **The removals therefore restore the original structure**, which the benchmark verifies after every repetition (the `restored` column in the CSVs). Every repetition rebuilds the original structure from scratch, untimed.
+
+> [!NOTE]
+> **W3: reserved capacity.** The array's capacity is reserved for n + 1,000 elements before timing. That way W3 measures positional shifting and not resizing, which W4 and `add(x)` already cover. Because the structure grows from n to n + m during the phase, the exact shift count is **m·(n − p) + m(m−1)/2**. For small n the m(m−1)/2 = 499,500 term dominates, which is important for reading the n = 100 row.
 
 ---
 
@@ -204,8 +258,10 @@ Hence J(m) holds at the start of the next iteration.
 All tables below are generated from the CSVs in [`results/tables/`](results/tables). [`summary.md`](results/tables/summary.md) contains every column, including µs/op and ns per unit of work, for all 56 experiments and the 56 JDK-reference runs.
 
 ![Plot 1: execution time vs n](results/plots/plot1_time_vs_n.png)
+<p align="center"><sub>Plot 1. Execution time vs n for every workload (mean of 5 runs, log–log axes).</sub></p>
 
 ![Plot 2: counted operations vs n](results/plots/plot2_operations_vs_n.png)
+<p align="center"><sub>Plot 2. Counted operations vs n, with the theoretical curves dotted.</sub></p>
 
 ### 5.1 Workload 1 — Random access (m = 10,000 × `get(i)`)
 
@@ -227,7 +283,10 @@ The counters match the theory: the array makes exactly one access per `get` at e
 | 10,000 | 5.63 | 14.66 | 2.60× | 7,534,742 | 7,500,250 | 0.75 / 1.95 | Θ(n) avg & worst, Θ(1) best |
 | 100,000 | 71.75 | 149.5 | 2.08× | 74,565,647 | 75,000,250 | 0.96 / 2.01 | Θ(n) avg & worst, Θ(1) best |
 
-Both structures perform **exactly the same comparisons**: the same algorithm on the same data. The count stays within 0.6% of the formula; the small deficit comes from where the 500 random hits happen to fall. From n = 1,000 upward both times grow about 10× per decade (Θ(n) per search), but the list pays about 2 ns per comparison against the array's 0.75–0.96 ns. At n = 100 the whole experiment lasts ≈ 0.2 ms, and one of the array's five runs was an outlier (0.74 ms against a minimum of 0.11 ms, CV 114%). That row is timer and OS noise, not a result.
+Both structures perform **exactly the same comparisons**: the same algorithm on the same data. The count stays within 0.6% of the formula; the small deficit comes from where the 500 random hits happen to fall. From n = 1,000 upward both times grow about 10× per decade (Θ(n) per search), but the list pays about 2 ns per comparison against the array's 0.75–0.96 ns.
+
+> [!NOTE]
+> At n = 100 the whole experiment lasts ≈ 0.2 ms, and one of the array's five runs was an outlier (0.74 ms against a minimum of 0.11 ms, CV 114%). That row is timer and OS noise, not a result.
 
 ### 5.3 Workload 3 — Insertion and removal (m = 1,000 at index 0 and at index n/2)
 
@@ -249,6 +308,7 @@ At the front the result is unambiguous. The list's cost stays at 0.007–0.07 ms
 In the middle, both structures are Θ(n) per operation, and the winner is decided by the constant factors: they are roughly tied at n = 10,000, and the list is 4.9× faster at n = 100,000. That last number is surprising, because shifting contiguous memory "should" beat pointer chasing. The array's cost per shift **jumps from 1.3 ns to 7.9 ns** between n = 10,000 and 100,000. The ablation below isolates the cause.
 
 ![Plot 3: W3 ablation](results/plots/plot3_w3_shift_cost_ablation.png)
+<p align="center"><sub>Plot 3. W3 ablation: cost per shift in four configurations (left) and total time for middle insertions at n = 100,000 (right).</sub></p>
 
 **W3 ablation: the same loop and the same shift count in four configurations (insert at index 0)**
 
@@ -270,7 +330,8 @@ In the middle, both structures are Θ(n) per operation, and the winner is decide
 | LinkedList, G1 default | 81.35 | 50,000,999 visits | 1.63 |
 | LinkedList, ParallelGC | 80.65 | 50,000,999 visits | 1.61 |
 
-The shift count is identical in every configuration, and so is the Java code of the loop, yet the cost per shift varies by **96×**. The mechanism behind this is explained in §6 (Q5).
+> [!IMPORTANT]
+> The shift count is identical in every configuration, and so is the Java code of the loop, yet the cost per shift varies by **96×**. The mechanism behind this is explained in §6 (Q5).
 
 ### 5.4 Workload 4 — Priority processing (Min-Heap)
 
@@ -287,8 +348,12 @@ The shift count is identical in every configuration, and so is the Java code of 
 - **Order check**: all four runs produced a non-decreasing sequence of length n.
 
 ![Plot 4: time per elementary step](results/plots/plot4_cost_per_step.png)
+<p align="center"><sub>Plot 4. Time per elementary step, which exposes the constant factors hidden by Big-O.</sub></p>
 
 ### 5.5 JDK reference (same data and protocol; context only)
+
+<details>
+<summary><b>Show the JDK reference table</b> (times in ms, same data and protocol)</summary>
 
 | n | `ArrayList` get ×10⁴ | `LinkedList` get ×10⁴ | `ArrayList` contains ×10³ | `LinkedList` contains ×10³ | `ArrayList` insert @0 ×10³ | `LinkedList` insert @n/2 ×10³ | `PriorityQueue` add ×n | `PriorityQueue` poll ×n |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -297,20 +362,26 @@ The shift count is identical in every configuration, and so is the Java code of 
 | 10,000 | 0.1250 | 33.38 | 5.63 | 15.22 | 0.9260 | 6.96 | 0.4960 | 1.45 |
 | 100,000 | 0.3338 | 382.7 | 75.32 | 165.8 | 8.24 | 77.07 | 3.42 | 26.63 |
 
+</details>
+
 The JDK classes land in the same ballpark as ours on W1, W2 and W4. The two exceptions tell a story: `ArrayList` shifts about 100× faster than our loop (W3), and `PriorityQueue` is 1.4–1.7× faster than our heap at n = 100,000. Both come down to implementation constants, discussed in §6.
 
 ---
 
 ## 6. Discussion
 
-**Q1. How does increasing n affect each workload?**
+### Q1. How does increasing n affect each workload?
+
 - **W1**: array time rises only 13× over a 1,000× range of n, from memory effects and not from more work. The list rises ≈ 10× per decade (Θ(n) per `get`).
 - **W2**: both structures rise ≈ 10× per decade once n ≥ 1,000, as Θ(n) per search predicts.
 - **W3 front**: the array grows with n, while the list stays constant.
 - **W3 middle**: both grow ≈ linearly. The array's jump at 10⁵ is a JVM effect (see Q3 and Q5).
 - **W4**: insert grows linearly in total (Θ(1) each), and extract grows as n log n.
 
-**Q2. Which experimental results agree with the theory?** All *operation counts* agree:
+### Q2. Which experimental results agree with the theory?
+
+All *operation counts* agree:
+
 - W1 accesses: exactly m for the array, and within 0.5% of the exact expectation for the list.
 - W2 comparisons: within 0.6% of 500·(n+1)/2 + 500·n.
 - W3: exactly equal to the predicted m·(n−p) + m(m−1)/2 shifts and m·(n/2 + 1) visits.
@@ -321,7 +392,8 @@ The *times* agree in shape wherever the working set stays in one cache level:
 - the array's `contains` at 0.75–0.96 ns/comparison;
 - the list's front insert and remove, flat at every n.
 
-**Q3. Where do the experiments differ from the prediction?**
+### Q3. Where do the experiments differ from the prediction?
+
 1. **Array `get` is Θ(1) but not constant-time.** The cost per `get` is 2.0 → 2.1 → 5.4 → 26.4 ns. The array's working set (a 4-byte reference plus a 16-byte `Integer` per element) is 2 KB, 20 KB, 200 KB and 2 MB. These fit L1 (32 KB), fit L1, fit L2 (1 MB), and spill into L3, respectively: the steps in the timing line up with the cache sizes. The RAM model assumes uniform memory cost; real memory does not provide it.
 2. **W3 on the array at n = 10⁵.** The work grew 9.6× from n = 10⁴, but the time grew 59×, because each shift became 6× more expensive (garbage-collector write barrier, Q5).
 3. **W3 for small n does not look like Θ(n) per operation.** At n = 100, 499,500 of the 599,500 shifts come from the structure *growing* to 1,100 elements during the phase. The workload's cost is Θ(m·n + m²), not Θ(m·n), so the n = 100 and n = 1,000 times differ by only 1.5×. A related effect: with the index fixed at n/2 = 50 in a list that grows to 1,100 elements, "middle" is really near the front, which is why the list wins every middle case at n = 100.
@@ -329,26 +401,34 @@ The *times* agree in shape wherever the working set stays in one cache level:
 5. **Heap extract time grows faster than log n** at 10⁵ (13.6 → 27.7 ns per operation per level). The sift-down path touches the heap array (≈ 0.5 MB at capacity 131,072) and 1.6 MB of `Integer` objects at essentially random addresses in the lower levels, and together these exceed L2.
 6. **Small-n noise.** At n = 100 some timed regions last only 20–300 µs, so fixed costs dominate. These include cache misses right after the pre-measurement GC and single scheduler events (the W2 n = 100 outlier). Rows with small n should therefore be read for their counts, not their times.
 
-**Q4. Why can two algorithms with the same Big-O have different running times?** Big-O deliberately drops constant factors and lower-order terms, and it assumes every "step" costs the same. The benchmark shows three concrete cases:
+### Q4. Why can two algorithms with the same Big-O have different running times?
+
+Big-O deliberately drops constant factors and lower-order terms, and it assumes every "step" costs the same. The benchmark shows three concrete cases:
+
 - **Linear search, same count.** In W2 both structures make *identical* comparison counts, but the list is 2–2.6× slower because its step includes a dependent pointer load.
 - **Same algorithm, different constant.** In W3 at n = 100,000, an identical shift loop costs 0.69 ns/shift under ParallelGC and 7.9 ns/shift under default G1, while `System.arraycopy` costs 0.08 ns (96× in total). The count is the same Θ(n) in all four configurations.
 - **Different kinds of work at the same n.** In the W3 middle case, the array's n/2 writes and the list's n/2 reads are both Θ(n), and which one wins depends entirely on those constants.
 
-**Q5. How do constant factors and implementation details affect performance?** Several effects appear in the measurements:
+### Q5. How do constant factors and implementation details affect performance?
+
+Several effects appear in the measurements:
+
 - **Memory layout and locality.** A contiguous array lets the CPU prefetch and run loads in parallel, while a linked list turns every step into a dependent load. Our list stays at a fairly good 1.2–1.6 ns/hop only because its nodes were allocated consecutively and GC compaction kept that order, so the prefetcher can follow them. In a long-running program with interleaved allocations, each hop could be a full cache miss.
 - **GC write barriers.** In Java, every store of a *reference* into the heap runs a garbage-collector barrier. G1's barrier is cheap when source and target lie in the same heap region. When they lie in different regions it takes a slower path, which in JDK 21 means a memory fence plus card marking. With 1 MB regions, the n = 100,000 array plus its 1.6 MB of `Integer`s span several regions, so almost every shift takes the slow path. With 32 MB regions everything fits in one region and the cost drops back to 1.3 ns/shift. ParallelGC's simple card-mark barrier stays at 0.66–0.75 ns/shift at every n. `System.arraycopy` moves the whole block with one bulk barrier and SIMD copies, at 0.08 ns/shift. The algorithm, the code and the Θ are the same in every case.
 - **Library-quality constants.** At n = 100,000, `PriorityQueue` beats our heap by 1.4–1.7× because it sifts with a "hole" (one write per level instead of a three-write swap) and has no instrumentation.
 - **Implementation choices change the constant inside the Θ.** Walking from the nearer end halves the list's worst case (⌈n/2⌉ instead of n hops) and makes both ends Θ(1). The benchmark only produces meaningful numbers after JIT warm-up: before the warm-up was added, the n = 100 array `get` measured 41 ns instead of 2 ns.
 - **Boxing.** Every element is an `Integer` object, so even the array's `contains` dereferences a pointer per element. A primitive `int[]` would remove that indirection (not measured here).
 
-**Q6. Why is a Dynamic Array preferable for some workloads?**
+### Q6. Why is a Dynamic Array preferable for some workloads?
+
 - **Random access.** It is Θ(1) and measured 1,368× faster than the list at n = 100,000 (W1).
 - **Scanning.** It is ≈ 2× faster per comparison than the list with the same Θ(n) (W2).
 - **Append.** `add(x)` is amortized Θ(1) and needs no per-element allocation.
 - **Memory.** It uses 3–6× less memory per element for the structure itself: 4–8 bytes (a reference plus up to 2× slack capacity) versus a 24-byte node.
 - **Middle insertions with a bulk copy.** Even though these are Θ(n), the memmove-style shift is so cheap that `ArrayList` beats both linked lists by about 19× at n = 100,000 (4.15 ms vs. 77–81 ms).
 
-**Q7. When can a Linked List be useful?**
+### Q7. When can a Linked List be useful?
+
 - **Changes at the ends.** Inserting or removing at the ends is Θ(1): measured 0.007–0.07 ms at every n, against 794 ms for the array at the front with n = 100,000.
 - **Queues and deques.** They combine appends at the tail with removals at the head.
 - **Splicing through a node you already hold.** When you already hold a position (an iterator or node reference), inserting or deleting there is Θ(1). The Θ(n) part of `add(i, x)` is *finding* the node, not changing the links.
@@ -356,9 +436,15 @@ The *times* agree in shape wherever the working set stays in one cache level:
 
 For index-based work and searching it is the wrong choice. For queues specifically, a circular-array deque (`ArrayDeque`) usually gives the list's Θ(1) ends with the array's locality.
 
-**Q8. Why is a Heap appropriate for priority-based processing?** Priority processing needs "insert anything, repeatedly take the smallest". The heap gives Θ(1) `peekMin`, Θ(log n) `extractMin`, and O(log n) (≈ Θ(1) on average) `insert`, all without keeping the data fully sorted. The alternatives cost Θ(n) on one side: a sorted array pays Θ(n) per insert, and an unsorted list pays Θ(n) per extract. At n = 100,000, extracting everything by linear scans would cost about n²/2 = 5·10⁹ comparisons. The heap's extractions used 2.83·10⁶, more than 1,700× fewer, and produced a correctly ordered stream every time. The heap is also compact, with no per-node pointers: the tree is implicit in the array indices.
+### Q8. Why is a Heap appropriate for priority-based processing?
 
-**Q9. How does the workload influence the choice of data structure?** The operation mix, not the data, decides:
+Priority processing needs "insert anything, repeatedly take the smallest". The heap gives Θ(1) `peekMin`, Θ(log n) `extractMin`, and O(log n) (≈ Θ(1) on average) `insert`, all without keeping the data fully sorted. The alternatives cost Θ(n) on one side: a sorted array pays Θ(n) per insert, and an unsorted list pays Θ(n) per extract. At n = 100,000, extracting everything by linear scans would cost about n²/2 = 5·10⁹ comparisons. The heap's extractions used 2.83·10⁶, more than 1,700× fewer, and produced a correctly ordered stream every time. The heap is also compact, with no per-node pointers: the tree is implicit in the array indices.
+
+
+### Q9. How does the workload influence the choice of data structure?
+
+The operation mix, not the data, decides:
+
 - which operation dominates (index lookups, searches, end or middle updates, or min-extraction);
 - *where* the updates happen (the front versus the middle flips the W3 comparison);
 - how large n gets relative to the caches (W1 and W3 changed character between 10⁴ and 10⁵);
