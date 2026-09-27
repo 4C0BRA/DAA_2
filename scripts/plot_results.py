@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""Draws the report plots from the CSV tables in results/tables/ into results/plots/.
-
-    python3 scripts/plot_results.py
-
-Needs only matplotlib. Every number drawn comes from the CSVs written by Benchmark.java.
-"""
 import csv
 import math
 from pathlib import Path
@@ -12,22 +5,21 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter  # noqa: E402
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLES = ROOT / "results" / "tables"
 PLOTS = ROOT / "results" / "plots"
 
-# Palette (validated: blue/orange/aqua pass CVD + normal-vision separation on all pairs).
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
 INK_2 = "#52514e"
 GRID = "#e4e3df"
 THEORY = "#9a9994"
-BLUE = "#2a78d6"      # DynamicArray (ours)
-ORANGE = "#eb6834"    # LinkedList (ours)
-AQUA = "#1baf7a"      # MinHeap / JDK ArrayList in the ablation
+BLUE = "#2a78d6"
+ORANGE = "#eb6834"
+AQUA = "#1baf7a"
 BLUE_LIGHT = "#86b6ef"
 BLUE_DARK = "#184f95"
 
@@ -63,18 +55,14 @@ plt.rcParams.update({
 
 SIZES = [100, 1_000, 10_000, 100_000]
 
-
 def read(name):
     with open(TABLES / name, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-
 def pick(rows, key, **match):
-    """Values of `key` for rows matching `match`, ordered by n."""
     sel = [r for r in rows if all(r[k] == v for k, v in match.items())]
     sel.sort(key=lambda r: int(r["n"]))
     return [float(r[key]) for r in sel]
-
 
 def n_axis(ax):
     ax.set_xscale("log")
@@ -82,7 +70,6 @@ def n_axis(ax):
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{int(v):,}"))
     ax.xaxis.set_minor_formatter(NullFormatter())
     ax.set_xlabel("n (elements initially stored)")
-
 
 def log_y(ax, fmt=None):
     ax.set_yscale("log")
@@ -92,20 +79,16 @@ def log_y(ax, fmt=None):
     ax.grid(True, which="major")
     ax.grid(False, which="minor")
 
-
 def series(ax, y, color, label, marker="o", ls="-", x=SIZES):
     ax.plot(x, y, color=color, ls=ls, marker=marker, markersize=6.5,
             markeredgecolor=SURFACE, markeredgewidth=1.5, label=label, zorder=3)
-
 
 def end_label(ax, x, y, text, dy=0, color=INK_2):
     ax.annotate(text, (x, y), xytext=(6, dy), textcoords="offset points",
                 va="center", ha="left", fontsize=8.5, color=color)
 
-
 def theory_line(ax, x, y, label):
     ax.plot(x, y, color=THEORY, lw=1.2, ls=(0, (1, 2)), label=label, zorder=2)
-
 
 def save(fig, name):
     PLOTS.mkdir(parents=True, exist_ok=True)
@@ -113,8 +96,6 @@ def save(fig, name):
     plt.close(fig)
     print("wrote", PLOTS / name)
 
-
-# ------------------------------------------------------------------------------------------
 def plot1_time_vs_n(w1, w2, w3, w4):
     fig, axs = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle("Plot 1 — Execution time vs n (mean of 5 runs, log–log)",
@@ -162,13 +143,11 @@ def plot1_time_vs_n(w1, w2, w3, w4):
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save(fig, "plot1_time_vs_n.png")
 
-
-# ------------------------------------------------------------------------------------------
 def plot2_operations_vs_n(w1, w2, w3, w4):
     fig, axs = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle("Plot 2 — Counted operations vs n (theory dotted; hidden where it coincides with the measurement)",
                  fontsize=14, fontweight="semibold", color=INK, x=0.01, ha="left")
-    xs = [100 * 10 ** (k / 20) for k in range(0, 61)]           # smooth x for theory curves
+    xs = [100 * 10 ** (k / 20) for k in range(0, 61)]
 
     ax = axs[0][0]
     series(ax, pick(w1, "accesses", structure="DynamicArray"), BLUE, "DynamicArray: element accesses")
@@ -233,8 +212,6 @@ def plot2_operations_vs_n(w1, w2, w3, w4):
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save(fig, "plot2_operations_vs_n.png")
 
-
-# ------------------------------------------------------------------------------------------
 def plot3_shift_ablation(w3, w3_32m, w3_par, jdk, ll):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5.2), gridspec_kw={"width_ratios": [1.1, 1]})
     fig.suptitle("Plot 3 — W3 ablation: the same shift algorithm and the same Θ(n) shift count, very different cost per shift",
@@ -263,10 +240,9 @@ def plot3_shift_ablation(w3, w3_32m, w3_par, jdk, ll):
     n_axis(ax1)
     log_y(ax1, lambda v, _: f"{v:g}")
     ax1.set_xlim(70, 400_000)
-    ax1.set_ylim(0.05, 60)                                   # headroom so the legend clears the data
+    ax1.set_ylim(0.05, 60)
     ax1.legend(loc="upper left", fontsize=8.5)
 
-    # Right: total time at n = 100 000 for 1,000 insertions in the middle (50.5 M shifts).
     def at100k(rows, **m):
         return [float(r["avg_ms"]) for r in rows if r["n"] == "100000"
                 and all(r[k] == v for k, v in m.items())][0]
@@ -294,8 +270,6 @@ def plot3_shift_ablation(w3, w3_32m, w3_par, jdk, ll):
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     save(fig, "plot3_w3_shift_cost_ablation.png")
 
-
-# ------------------------------------------------------------------------------------------
 def plot4_cost_per_step(w1, w2, w4):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
     fig.suptitle("Plot 4 — Time per elementary step: where the constant factors hide",
@@ -332,7 +306,6 @@ def plot4_cost_per_step(w1, w2, w4):
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     save(fig, "plot4_cost_per_step.png")
 
-
 def main():
     w1 = read("w1_random_access.csv")
     w2 = read("w2_search.csv")
@@ -348,7 +321,6 @@ def main():
     else:
         print("skipping plot 3: run the W3 ablation runs in run_benchmark.sh first")
     plot4_cost_per_step(w1, w2, w4)
-
 
 if __name__ == "__main__":
     main()

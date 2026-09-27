@@ -1,5 +1,4 @@
 @echo off
-REM Reproduces every table and plot in results\ (Windows).
 cd /d "%~dp0"
 javac -encoding UTF-8 -d out src\*.java || exit /b 1
 java -Xms1g -Xmx1g -XX:+UseG1GC -cp out Benchmark || exit /b 1

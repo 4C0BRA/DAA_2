@@ -1,27 +1,7 @@
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-/**
- * A doubly linked list with head and tail pointers, written from scratch.
- *
- * <p>Every element lives in its own heap-allocated {@link Node}; nodes are connected by
- * {@code prev}/{@code next} references, so reaching position {@code i} means following
- * pointers. The lookup {@link #node(int)} walks from whichever end is closer, so it
- * visits at most ⌈n/2⌉ nodes — the middle of the list is the most expensive position.
- *
- * <p>Instrumentation (read by the benchmark):
- * <ul>
- *   <li>{@code accesses}    – nodes visited (one per node touched while walking, plus the
- *                             end node used by an O(1) append);</li>
- *   <li>{@code comparisons} – equality tests performed by {@code contains};</li>
- *   <li>{@code movements}   – always 0: a linked list never moves elements, it only
- *                             rewires a constant number of pointers per insert/remove.</li>
- * </ul>
- *
- * @param <T> element type ({@code null} elements are allowed)
- */
 public class LinkedList<T> implements IndexedList<T> {
-
     private static final class Node<T> {
         T value;
         Node<T> prev;
@@ -40,19 +20,12 @@ public class LinkedList<T> implements IndexedList<T> {
     private long comparisons;
     private final long movements = 0;
 
-    // ------------------------------------------------------------------ operations
-
-    /** Appends {@code x} at the end using the tail pointer. Θ(1). */
     @Override
     public void add(T x) {
         linkLast(x);
         accesses++;
     }
 
-    /**
-     * Inserts {@code x} at position {@code index} (0 ≤ index ≤ size).
-     * Locating the position costs Θ(min(index, size − index)); the splice itself is Θ(1).
-     */
     @Override
     public void add(int index, T x) {
         checkPositionIndex(index);
@@ -64,7 +37,6 @@ public class LinkedList<T> implements IndexedList<T> {
         }
     }
 
-    /** Removes and returns the element at {@code index}. Θ(min(index, size − 1 − index)). */
     @Override
     public T remove(int index) {
         checkElementIndex(index);
@@ -73,20 +45,17 @@ public class LinkedList<T> implements IndexedList<T> {
         return target.value;
     }
 
-    /** Returns the element at {@code index}. Θ(min(index, size − 1 − index)): pointer chasing. */
     @Override
     public T get(int index) {
         checkElementIndex(index);
         return node(index).value;
     }
 
-    /** Linear search from the head. Θ(1) best, Θ(n) average and worst (absent). */
     @Override
     public boolean contains(Object x) {
         return indexOf(x) >= 0;
     }
 
-    /** Index of the first occurrence of {@code x}, or −1. Counts one comparison per node inspected. */
     @Override
     public int indexOf(Object x) {
         int i = 0;
@@ -122,8 +91,6 @@ public class LinkedList<T> implements IndexedList<T> {
         return size == 0;
     }
 
-    // ------------------------------------------------------------------ instrumentation
-
     @Override
     public long getAccesses() {
         return accesses;
@@ -145,12 +112,6 @@ public class LinkedList<T> implements IndexedList<T> {
         comparisons = 0;
     }
 
-    // ------------------------------------------------------------------ helpers
-
-    /**
-     * Returns the node at {@code index}, walking from the nearer end.
-     * Visits {@code min(index, size-1-index) + 1} nodes.
-     */
     private Node<T> node(int index) {
         Node<T> cur;
         int steps;
@@ -183,7 +144,6 @@ public class LinkedList<T> implements IndexedList<T> {
         size++;
     }
 
-    /** Splices a new node holding {@code x} immediately before {@code succ}. Θ(1). */
     private void linkBefore(T x, Node<T> succ) {
         Node<T> n = new Node<>(x);
         Node<T> pred = succ.prev;
@@ -198,7 +158,6 @@ public class LinkedList<T> implements IndexedList<T> {
         size++;
     }
 
-    /** Detaches {@code n} from the chain. Θ(1). */
     private void unlink(Node<T> n) {
         Node<T> pred = n.prev;
         Node<T> succ = n.next;
@@ -229,10 +188,6 @@ public class LinkedList<T> implements IndexedList<T> {
         }
     }
 
-    /**
-     * Structural self-check used by the tests: head/tail consistency, prev/next symmetry,
-     * and that walking forward and backward both see exactly {@code size} nodes.
-     */
     boolean checkInvariants() {
         if (size == 0) {
             return head == null && tail == null;
@@ -249,7 +204,7 @@ public class LinkedList<T> implements IndexedList<T> {
             last = cur;
             forward++;
             if (forward > size) {
-                return false;              // cycle guard
+                return false;
             }
         }
         if (last != tail || forward != size) {

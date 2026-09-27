@@ -7,22 +7,7 @@ import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.function.Supplier;
 
-/**
- * Self-contained correctness suite (no external test framework needed):
- *
- * <pre>
- *   javac -d out src/*.java
- *   java -cp out Tests
- * </pre>
- *
- * Covers, for every structure: empty structure, one element, multiple elements,
- * duplicates, boundary indices, invalid indices and large inputs. The two lists are
- * checked against {@link java.util.ArrayList} / {@link java.util.LinkedList}; the heap is
- * checked against {@link java.util.PriorityQueue}, and its heap property is verified
- * after every insertion and every extraction. Exits with status 1 if any check fails.
- */
 public class Tests {
-
     private static int passed;
     private static int failed;
     private static final List<String> failures = new ArrayList<>();
@@ -46,12 +31,9 @@ public class Tests {
         System.out.println("ALL TESTS PASSED");
     }
 
-    // ====================================================================== list suite
-
     private static void runListSuite(String name, Supplier<IndexedList<Integer>> factory) {
         System.out.println("== " + name);
 
-        // ---- empty structure
         IndexedList<Integer> l = factory.get();
         check(l.size() == 0 && l.isEmpty(), name + " empty: size 0 / isEmpty");
         check(!l.contains(1), name + " empty: contains false");
@@ -64,7 +46,6 @@ public class Tests {
         l.add(0, 42);
         check(l.size() == 1 && l.get(0) == 42, name + " empty: add(0,x) is allowed");
 
-        // ---- one element
         l = factory.get();
         l.add(7);
         check(l.size() == 1 && !l.isEmpty(), name + " one: size 1");
@@ -78,7 +59,6 @@ public class Tests {
         l.add(0, 0);
         check(sameAs(l, List.of(0, 1)), name + " one: add(0,x) before single element");
 
-        // ---- multiple elements (checked against java.util.ArrayList after every step)
         l = factory.get();
         List<Integer> ref = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -102,7 +82,6 @@ public class Tests {
         check(getsMatch, name + " multi: get(i) matches reference for every i");
         check(l.contains(9) && !l.contains(55) && !l.contains(-1), name + " multi: contains after edits");
 
-        // ---- duplicate values
         l = factory.get();
         for (int v : new int[]{3, 3, 1, 3, 2, 3}) {
             l.add(v);
@@ -116,17 +95,15 @@ public class Tests {
         }
         check(sameAs(l, List.of(1, 2)) && !l.contains(3), name + " dup: all copies removable");
 
-        // ---- null elements are allowed and searchable
         l = factory.get();
         l.add(1);
         l.add(null);
         l.add(2);
         check(l.contains(null) && l.indexOf(null) == 1 && l.get(1) == null, name + " null element stored and found");
 
-        // ---- boundary indices
         l = factory.get();
         for (int i = 0; i < 5; i++) {
-            l.add(i * 10);                           // [0,10,20,30,40]
+            l.add(i * 10);
         }
         check(l.get(0) == 0 && l.get(4) == 40, name + " boundary: get(0), get(size-1)");
         l.add(0, -5);
@@ -135,7 +112,6 @@ public class Tests {
         check(l.remove(0) == -5 && l.remove(l.size() - 1) == 50, name + " boundary: remove(0), remove(size-1)");
         check(sameAs(l, List.of(0, 10, 20, 30, 40)), name + " boundary: contents after boundary removals");
 
-        // ---- invalid indices: exception + structure unchanged
         final IndexedList<Integer> b = l;
         expectThrows(IndexOutOfBoundsException.class, () -> b.get(-1), name + " invalid: get(-1)");
         expectThrows(IndexOutOfBoundsException.class, () -> b.get(b.size()), name + " invalid: get(size)");
@@ -145,7 +121,6 @@ public class Tests {
         expectThrows(IndexOutOfBoundsException.class, () -> b.add(b.size() + 1, 9), name + " invalid: add(size+1,x)");
         check(sameAs(l, List.of(0, 10, 20, 30, 40)), name + " invalid: failed calls leave the list unchanged");
 
-        // ---- large input: 100 000 appends, then front/middle/back access
         l = factory.get();
         int big = 100_000;
         for (int i = 0; i < big; i++) {
@@ -165,12 +140,10 @@ public class Tests {
         }
         check(l.size() == big - 1000 && l.get(0) == 1000, name + " large: 1000 front removals");
 
-        // ---- randomized differential test against the JDK
         differentialListTest(name, factory.get(), name.equals("LinkedList")
                 ? new java.util.LinkedList<>() : new ArrayList<>());
     }
 
-    /** 60 000 random operations applied to both our list and a JDK list; results must agree. */
     private static void differentialListTest(String name, IndexedList<Integer> ours, List<Integer> jdk) {
         Random rnd = new Random(42);
         boolean ok = true;
@@ -178,22 +151,22 @@ public class Tests {
         for (int step = 0; step < 60_000 && ok; step++) {
             int op = rnd.nextInt(10);
             int n = jdk.size();
-            if (op < 3 || n == 0) {                          // add(x)
+            if (op < 3 || n == 0) {
                 int v = rnd.nextInt(500);
                 ours.add(v);
                 jdk.add(v);
-            } else if (op < 5) {                             // add(index, x), index in [0, n]
+            } else if (op < 5) {
                 int idx = rnd.nextInt(n + 1);
                 int v = rnd.nextInt(500);
                 ours.add(idx, v);
                 jdk.add(idx, v);
-            } else if (op < 7) {                             // remove(index)
+            } else if (op < 7) {
                 int idx = rnd.nextInt(n);
                 ok = ours.remove(idx).equals(jdk.remove(idx));
-            } else if (op < 9) {                             // get(index)
+            } else if (op < 9) {
                 int idx = rnd.nextInt(n);
                 ok = ours.get(idx).equals(jdk.get(idx));
-            } else {                                         // contains / indexOf
+            } else {
                 int v = rnd.nextInt(600);
                 ok = ours.contains(v) == jdk.contains(v) && ours.indexOf(v) == jdk.indexOf(v);
             }
@@ -243,7 +216,7 @@ public class Tests {
         c.add(c.size(), 98);
         check(c.getMovements() == 0, "DynamicArray counters: add(size,x) moves nothing");
         c.resetCounters();
-        int before = c.size();                               // 12 elements now
+        int before = c.size();
         c.remove(0);
         check(c.getMovements() == before - 1, "DynamicArray counters: remove(0) on n elements moves n-1");
         c.resetCounters();
@@ -301,12 +274,9 @@ public class Tests {
         check(l.getComparisons() == l.size(), "LinkedList counters: unsuccessful search compares all n");
     }
 
-    // ====================================================================== heap suite
-
     private static void runHeapSuite() {
         System.out.println("== MinHeap");
 
-        // ---- empty
         MinHeap<Integer> h = new MinHeap<>();
         check(h.isEmpty() && h.size() == 0 && h.isValidHeap(), "heap empty: size 0, valid");
         final MinHeap<Integer> e = h;
@@ -315,14 +285,12 @@ public class Tests {
         expectThrows(NullPointerException.class, () -> e.insert(null), "heap: null rejected");
         expectThrows(IllegalArgumentException.class, () -> new MinHeap<Integer>(-1), "heap: negative capacity rejected");
 
-        // ---- one element
         h.insert(5);
         check(h.size() == 1 && h.peekMin() == 5 && h.size() == 1, "heap one: peekMin does not remove");
         check(h.extractMin() == 5 && h.isEmpty(), "heap one: extractMin empties");
         expectThrows(NoSuchElementException.class, e::extractMin, "heap one: extract after drain throws");
 
-        // ---- multiple elements, property after every insertion and extraction
-        h = new MinHeap<>(1);                                     // forces several resizes
+        h = new MinHeap<>(1);
         int[] vals = {5, 3, 8, 1, 9, 2, 7, 4, 6, 0};
         boolean validAfterInsert = true;
         for (int v : vals) {
@@ -340,7 +308,6 @@ public class Tests {
         check(validAfterExtract, "heap multi: heap property after every extraction");
         check(out.equals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)), "heap multi: extraction is sorted");
 
-        // ---- duplicates, sorted, reverse-sorted and all-equal inputs
         heapOrderCase("duplicates", new int[]{4, 1, 4, 1, 4, 1, 2, 2, 9, 9, 0, 0});
         heapOrderCase("ascending", range(0, 500, 1));
         heapOrderCase("descending (every insert sifts to root)", range(500, 0, -1));
@@ -348,7 +315,6 @@ public class Tests {
         heapOrderCase("negative & extreme values",
                 new int[]{Integer.MAX_VALUE, -1, Integer.MIN_VALUE, 0, 1, Integer.MIN_VALUE, Integer.MAX_VALUE});
 
-        // ---- property after EVERY operation on a mid-size random input
         Random rnd = new Random(42);
         h = new MinHeap<>();
         boolean everyOp = true;
@@ -367,7 +333,6 @@ public class Tests {
         check(everyOp, "heap random 2k: property holds after each of 4000 operations");
         check(nonDecreasing, "heap random 2k: extracted values non-decreasing");
 
-        // ---- large input vs PriorityQueue
         int big = 100_000;
         h = new MinHeap<>();
         PriorityQueue<Integer> pq = new PriorityQueue<>();
@@ -390,7 +355,6 @@ public class Tests {
         check(samePolls && h.isEmpty(), "heap large: 100k extractions identical to PriorityQueue.poll()");
         check(nonDecreasing, "heap large: 100k extractions non-decreasing");
 
-        // ---- interleaved random ops vs PriorityQueue
         h = new MinHeap<>();
         pq = new PriorityQueue<>();
         rnd = new Random(7);
@@ -413,19 +377,18 @@ public class Tests {
         }
         check(agree, "heap differential: 100k interleaved insert/extract/peek agree with PriorityQueue");
 
-        // ---- comparison counters behave as the analysis predicts
         h = new MinHeap<>();
         for (int i = 0; i < 1024; i++) {
-            h.insert(i);                                          // ascending: never sifts
+            h.insert(i);
         }
         check(h.getComparisons() == 1023 && h.getMovements() == 0, "heap counters: ascending inserts cost exactly 1 comparison each (best case)");
         h = new MinHeap<>();
         long worst = 0;
         for (int i = 1023; i >= 0; i--) {
-            h.insert(i);                                          // descending: sifts to root
+            h.insert(i);
         }
         for (int k = 2; k <= 1024; k++) {
-            worst += 31 - Integer.numberOfLeadingZeros(k);        // depth of node k-1 = floor(log2 k)
+            worst += 31 - Integer.numberOfLeadingZeros(k);
         }
         check(h.getComparisons() == worst, "heap counters: descending inserts cost floor(log2 k) comparisons each (worst case)");
         h.resetCounters();
@@ -452,8 +415,6 @@ public class Tests {
         }
         check(valid && matches && h.isEmpty(), "heap " + label + ": valid after each op, output == sorted input");
     }
-
-    // ====================================================================== helpers
 
     private static boolean sameAs(Iterable<Integer> ours, List<Integer> expected) {
         Iterator<Integer> it = ours.iterator();

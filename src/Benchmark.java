@@ -14,38 +14,7 @@ import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-/**
- * Runs the four fixed workloads of the assignment and writes the results to
- * {@code results/tables/} (one CSV per workload + {@code summary.md} + {@code environment.txt}).
- *
- * <pre>
- *   javac -encoding UTF-8 -d out src/*.java
- *   java -Xms1g -Xmx1g -cp out Benchmark                      # all workloads, default GC (G1)
- *   java -Xms1g -Xmx1g -XX:+UseParallelGC -cp out Benchmark --only w3 --tag parallelgc
- * </pre>
- * Options: {@code --out DIR} (default results/tables), {@code --only w1|w2|w3|w4|jdk}
- * (comma-separated), {@code --tag NAME} (suffix for the CSV file names).
- *
- * <h2>Protocol (identical for every experiment)</h2>
- * <ul>
- *   <li>n ∈ {100, 1 000, 10 000, 100 000}; m is fixed per workload (10 000 gets, 1 000 searches,
- *       1 000 inserts + 1 000 removals, n heap inserts + n extractions).</li>
- *   <li>All input data (values, indices, search keys) is generated from {@code new Random(42)}
- *       <em>before</em> any timed section, so every structure and every repetition sees exactly
- *       the same data. Building the structure is also untimed.</li>
- *   <li>A JIT warm-up pass runs every workload {@value #WARMUP_REPS} times at n = 1 000 and
- *       3 times at n = 10 000 before anything is measured, so the timed loops run as C2-compiled
- *       code; then each experiment runs 1 discarded repetition + {@value #RUNS} measured repetitions. The reported value
- *       is the mean of the {@value #RUNS} measured repetitions (min/max/stddev are in the CSVs).</li>
- *   <li>Timing uses {@link System#nanoTime()} around the operation loop only; no printing or
- *       allocation of inputs happens inside it. Results feed a checksum so the JIT cannot
- *       eliminate the work.</li>
- *   <li>Operation counts come from the counters built into the structures; they are
- *       deterministic, so they are identical in every repetition.</li>
- * </ul>
- */
 public class Benchmark {
-
     static final int[] SIZES = {100, 1_000, 10_000, 100_000};
     static final int RUNS = 5;
     static final long SEED = 42L;
@@ -54,7 +23,6 @@ public class Benchmark {
     static final int W3_OPS = 1_000;
     static final int WARMUP_REPS = 15;
 
-    /** Accumulates results of the timed loops so the JIT cannot treat them as dead code. */
     private static long checksum;
     private static boolean warmup;
     private static int warmupReps;
@@ -146,8 +114,6 @@ public class Benchmark {
         }
     }
 
-    // ============================================================ Workload 1 — random access
-
     private static void workload1(int n) {
         Random rnd = new Random(SEED);
         Integer[] values = randomValues(rnd, n);
@@ -187,7 +153,7 @@ public class Benchmark {
             accesses[0] = l.getAccesses();
             return new long[]{t};
         })[0];
-        // Expected nodes visited for a uniform index: E[min(i, n-1-i)] + 1
+
         double sum = 0;
         for (int i = 0; i < n; i++) {
             sum += Math.min(i, n - 1 - i) + 1;
@@ -207,17 +173,14 @@ public class Benchmark {
         System.out.printf("  W1 %-12s avg %10.3f ms  %9.1f ns/get  accesses %,d%n", s, st[0], nsPerOp, accesses);
     }
 
-    // ============================================================ Workload 2 — search
-
     private static void workload2(int n) {
         Random rnd = new Random(SEED);
         Integer[] values = randomValues(rnd, n);
-        // Half of the keys are present (a copy of a random stored element), half are absent
-        // (negative, while every stored value is non-negative). Keys are interleaved hit/miss.
+
         Integer[] keys = new Integer[W2_OPS];
         for (int i = 0; i < W2_OPS; i++) {
             keys[i] = (i % 2 == 0)
-                    ? Integer.valueOf(values[rnd.nextInt(n)].intValue())   // new object, equal value
+                    ? Integer.valueOf(values[rnd.nextInt(n)].intValue())
                     : Integer.valueOf(-1 - rnd.nextInt(Integer.MAX_VALUE));
         }
         int hitsExpected = (W2_OPS + 1) / 2;
@@ -276,18 +239,14 @@ public class Benchmark {
         System.out.printf("  W2 %-12s avg %10.3f ms  %9.2f us/search  comparisons %,d (hits %d)%n", s, st[0], usPerOp, comparisons, hits);
     }
 
-    // ============================================================ Workload 3 — insertion & removal
-
     private static void workload3(int n) {
         Random rnd = new Random(SEED);
         Integer[] values = randomValues(rnd, n);
-        Integer[] extra = randomValues(rnd, W3_OPS);           // the values that get inserted
+        Integer[] extra = randomValues(rnd, W3_OPS);
 
         for (String position : new String[]{"front", "middle"}) {
             final int index = position.equals("front") ? 0 : n / 2;
 
-            // ---- Dynamic Array. Capacity is reserved for n + m elements (untimed), so the
-            // timed section measures positional shifting only, not resizing.
             long[] m = new long[4];
             boolean[] restored = new boolean[1];
             double[][] arr = timeRuns(() -> {
@@ -302,8 +261,7 @@ public class Benchmark {
                 m[0] = a.getMovements();
                 m[1] = a.getAccesses();
                 a.resetCounters();
-                // Phase B starts from the state left by phase A and removes at the same index:
-                // this deletes exactly the 1 000 inserted elements and restores the original.
+
                 long acc = 0;
                 long t1 = System.nanoTime();
                 for (int i = 0; i < W3_OPS; i++) {
@@ -320,7 +278,6 @@ public class Benchmark {
             recordW3("DynamicArray", position, "insert", index, n, arr[0], m[0], 0, shifts, restored[0], "Θ(n − index)");
             recordW3("DynamicArray", position, "remove", index, n, arr[1], m[2], 0, shifts, restored[0], "Θ(n − index)");
 
-            // ---- Linked List
             double[][] lst = timeRuns(() -> {
                 LinkedList<Integer> l = buildList(values);
                 l.resetCounters();
@@ -351,17 +308,12 @@ public class Benchmark {
         }
     }
 
-    /**
-     * Nodes the list must visit for m operations at a fixed {@code index}, following the
-     * nearest-end rule: reaching position p in a list of size s visits min(p, s−1−p)+1 nodes.
-     * Inserts see sizes n..n+m−1, removals see sizes n+m..n+1.
-     */
     private static long predictedVisits(int n, int index, boolean insert) {
         long total = 0;
         for (int k = 0; k < W3_OPS; k++) {
             int s = insert ? n + k : n + W3_OPS - k;
             if (insert && index == s) {
-                total += 1;                                   // append via tail
+                total += 1;
             } else {
                 total += (index < (s >> 1)) ? index + 1 : s - index;
             }
@@ -385,8 +337,6 @@ public class Benchmark {
         System.out.printf("  W3 %-12s %-6s %-6s avg %10.3f ms  %9.3f us/op  %s%n", s, op, position, st[0], usPerOp, work);
     }
 
-    // ============================================================ Workload 4 — priority processing
-
     private static void workload4(int n) {
         Random rnd = new Random(SEED);
         Integer[] values = randomValues(rnd, n);
@@ -394,27 +344,27 @@ public class Benchmark {
         long[] m = new long[5];
         boolean[] ordered = new boolean[1];
         double[][] st = timeRuns(() -> {
-            MinHeap<Integer> h = new MinHeap<>();              // 1. empty heap (default capacity 16)
+            MinHeap<Integer> h = new MinHeap<>();
             prepare();
             long t0 = System.nanoTime();
-            for (int i = 0; i < n; i++) {                      // 2. n insertions (incl. amortized growth)
+            for (int i = 0; i < n; i++) {
                 h.insert(values[i]);
             }
-            long tIns = System.nanoTime() - t0;                // 3. total insertion time
+            long tIns = System.nanoTime() - t0;
             m[0] = h.getComparisons();
             m[1] = h.getMovements();
             h.resetCounters();
 
-            long acc = h.peekMin();                            // peekMin = heap[0], Θ(1) (not timed)
+            long acc = h.peekMin();
             int[] out = new int[n];
             long t2 = System.nanoTime();
-            for (int i = 0; i < n; i++) {                      // 4. n extractions
+            for (int i = 0; i < n; i++) {
                 out[i] = h.extractMin();
             }
-            long tExt = System.nanoTime() - t2;                // 5. total extraction time
-            m[2] = h.getComparisons();                         // 6. comparisons
+            long tExt = System.nanoTime() - t2;
+            m[2] = h.getComparisons();
             m[3] = h.getMovements();
-            boolean ok = h.isEmpty();                          // 7. non-decreasing order
+            boolean ok = h.isEmpty();
             for (int i = 1; i < n; i++) {
                 ok &= out[i - 1] <= out[i];
                 acc += out[i];
@@ -424,8 +374,8 @@ public class Benchmark {
             return new long[]{tIns, tExt};
         });
 
-        long insertBound = 0;                                  // Σ floor(log2 k): every insert sifts to the root
-        long extractBound = 0;                                 // Σ 2·floor(log2 s): every extract sifts to a leaf
+        long insertBound = 0;
+        long extractBound = 0;
         for (int k = 1; k <= n; k++) {
             insertBound += floorLog2(k);
         }
@@ -452,13 +402,6 @@ public class Benchmark {
                 phase, st[0], nsPerOp, comps, compsPerOp, ordered);
     }
 
-    // ============================================================ JDK reference (context only)
-
-    /**
-     * Same workloads on java.util.ArrayList / LinkedList / PriorityQueue. Not part of the
-     * required analysis: it only shows how our constant factors compare with tuned library
-     * code (e.g. ArrayList shifts with System.arraycopy instead of an element-by-element loop).
-     */
     private static void jdkReference(int n) {
         Random rnd = new Random(SEED);
         Integer[] values = randomValues(rnd, n);
@@ -473,7 +416,7 @@ public class Benchmark {
             keys[i] = (i % 2 == 0) ? Integer.valueOf(values[rnd2.nextInt(n)].intValue())
                     : Integer.valueOf(-1 - rnd2.nextInt(Integer.MAX_VALUE));
         }
-        Random rnd3 = new Random(SEED);                        // same inserted values as workload 3
+        Random rnd3 = new Random(SEED);
         randomValues(rnd3, n);
         Integer[] extra = randomValues(rnd3, W3_OPS);
 
@@ -568,20 +511,13 @@ public class Benchmark {
         jdkMd.append(md(w, fmtN(n), s, op, ms(st[0])));
     }
 
-    // ============================================================ timing machinery
-
-    /** One repetition: performs its own untimed setup and returns the elapsed ns of each timed phase. */
     @FunctionalInterface
     private interface Trial {
         long[] run();
     }
 
-    /**
-     * Runs 1 discarded repetition + RUNS measured ones and returns, for every timed phase,
-     * {avg, min, max, stddev} in milliseconds.
-     */
     private static double[][] timeRuns(Trial trial) {
-        trial.run();                                           // discarded (JIT / cache warm-up)
+        trial.run();
         int reps = warmup ? warmupReps : RUNS;
         long[][] samples = null;
         for (int r = 0; r < reps; r++) {
@@ -618,14 +554,10 @@ public class Benchmark {
         return new double[]{mean / 1e6, min / 1e6, max / 1e6, sd / 1e6};
     }
 
-    /** Untimed: collect garbage left by the previous repetition so it is not paid for inside the timer. */
     private static void prepare() {
         System.gc();
     }
 
-    // ============================================================ data helpers
-
-    /** n non-negative random ints (boxed once, before timing). */
     private static Integer[] randomValues(Random rnd, int n) {
         Integer[] v = new Integer[n];
         for (int i = 0; i < n; i++) {
@@ -663,8 +595,6 @@ public class Benchmark {
     private static int floorLog2(int x) {
         return 31 - Integer.numberOfLeadingZeros(x);
     }
-
-    // ============================================================ output helpers
 
     private static String summaryMarkdown(List<String> only) {
         StringBuilder sb = new StringBuilder();
